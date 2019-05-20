@@ -658,5 +658,8 @@
     <ClInclude Include="src\models\flight_control\FGLinearActuator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\JSBSim.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

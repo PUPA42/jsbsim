@@ -38,7 +38,6 @@ HISTORY
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 INCLUDES
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
-
 #include "initialization/FGTrim.h"
 #include "FGFDMExec.h"
 #include "input_output/FGXMLFileRead.h"
@@ -69,6 +68,9 @@ INCLUDES
 #include <iostream>
 #include <cstdlib>
 
+#include "FWSInterface.h"
+#include "JSBSim.h"
+
 using namespace std;
 using JSBSim::FGXMLFileRead;
 using JSBSim::Element;
@@ -95,9 +97,9 @@ bool catalog;
 bool nohighlight;
 
 double end_time = 1e99;
-double simulation_rate = 1./120.;
+double simulation_rate = 1. / 120.;
 bool override_sim_rate = false;
-double sleep_period=0.01;
+double sleep_period = 0.01;
 
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 FORWARD DECLARATIONS
@@ -108,71 +110,71 @@ int real_main(int argc, char* argv[]);
 void PrintHelp(void);
 
 #if defined(__BORLANDC__) || defined(_MSC_VER) || defined(__MINGW32__)
-  double getcurrentseconds(void)
-  {
-    struct timeb tm_ptr;
-    ftime(&tm_ptr);
-    return tm_ptr.time + tm_ptr.millitm*0.001;
-  }
+double getcurrentseconds(void)
+{
+	struct timeb tm_ptr;
+	ftime(&tm_ptr);
+	return tm_ptr.time + tm_ptr.millitm*0.001;
+}
 #else
-  double getcurrentseconds(void)
-  {
-    struct timeval tval;
-    struct timezone tz;
+double getcurrentseconds(void)
+{
+	struct timeval tval;
+	struct timezone tz;
 
-    gettimeofday(&tval, &tz);
-    return (tval.tv_sec + tval.tv_usec*1e-6);
-  }
+	gettimeofday(&tval, &tz);
+	return (tval.tv_sec + tval.tv_usec*1e-6);
+}
 #endif
 
 #if defined(__BORLANDC__) || defined(_MSC_VER) || defined(__MINGW32__)
-  void sim_nsleep(long nanosec)
-  {
-    Sleep((DWORD)(nanosec*1e-6)); // convert nanoseconds (passed in) to milliseconds for Win32.
-  }
+void sim_nsleep(long nanosec)
+{
+	Sleep((DWORD)(nanosec*1e-6)); // convert nanoseconds (passed in) to milliseconds for Win32.
+}
 #else
-  void sim_nsleep(long nanosec)
-  {
-    struct timespec ts, ts1;
+void sim_nsleep(long nanosec)
+{
+	struct timespec ts, ts1;
 
-    ts.tv_sec = 0;
-    ts.tv_nsec = nanosec;
-    nanosleep(&ts, &ts1);
-  }
+	ts.tv_sec = 0;
+	ts.tv_nsec = nanosec;
+	nanosleep(&ts, &ts1);
+}
 #endif
 
 /** This class is solely for the purpose of determining what type
-    of file is given on the command line */
+	of file is given on the command line */
 class XMLFile : public FGXMLFileRead {
 public:
-  bool IsScriptFile(const SGPath& filename) {
-    bool result=false;
-    Element *document = LoadXMLDocument(filename, false);
-    if (document && document->GetName() == "runscript") result = true;
-    ResetParser();
-    return result;
-  }
-  bool IsLogDirectiveFile(const SGPath& filename) {
-    bool result=false;
-    Element *document = LoadXMLDocument(filename, false);
-    if (document && document->GetName() == "output") result = true;
-    ResetParser();
-    return result;
-  }
-  bool IsAircraftFile(const SGPath& filename) {
-    bool result=false;
-    Element* document = LoadXMLDocument(filename, false);
-    if (document && document->GetName() == "fdm_config") result = true;
-    ResetParser();
-    return result;
-  }
-  bool IsInitFile(const SGPath& filename) {
-    bool result=false;
-    Element *document = LoadXMLDocument(filename, false);
-    if (document && document->GetName() == "initialize") result = true;
-    ResetParser();
-    return result;
-  }
+	bool IsScriptFile(const SGPath& filename) {
+		bool result = false;
+		Element *document = LoadXMLDocument(filename, false);
+		if (document && document->GetName() == "runscript") result = true;
+		ResetParser();
+		return result;
+	}
+	bool IsLogDirectiveFile(const SGPath& filename) {
+		bool result = false;
+		Element *document = LoadXMLDocument(filename, false);
+		if (document && document->GetName() == "output") result = true;
+		ResetParser();
+		return result;
+	}
+	bool IsAircraftFile(const SGPath& filename) {
+		bool result = false;
+		Element* document = LoadXMLDocument(filename, false);
+		if (document && document->GetName() == "fdm_config") result = true;
+		ResetParser();
+		return result;
+	}
+	bool IsInitFile(const SGPath& filename) {
+		bool result = false;
+		Element *document = LoadXMLDocument(filename, false);
+		if (document && document->GetName() == "initialize") result = true;
+		ResetParser();
+		return result;
+	}
 };
 
 /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -192,7 +194,7 @@ CLASS DOCUMENTATION
  * formally known as JSBSim-ML (JSBSim Markup Language).
  *
  * JSBSim (www.jsbsim.org) was created initially for the open source FlightGear
- * flight simulator (www.flightgear.org). JSBSim maintains the ability to run 
+ * flight simulator (www.flightgear.org). JSBSim maintains the ability to run
  * as a standalone executable in soft real-time, or batch mode. This is useful
  * for running tests or sets of tests automatically using the internal scripting
  * capability.
@@ -216,7 +218,7 @@ CLASS DOCUMENTATION
  * basic theoretical aero knowledge.
  *
  * One of the more unique features of JSBSim is its method of modeling aircraft
- * systems such as a flight control system, autopilot, electrical, etc. 
+ * systems such as a flight control system, autopilot, electrical, etc.
  * These are modeled by assembling strings of components that represent filters,
  * switches, summers, gains, sensors, and so on.
  *
@@ -270,297 +272,309 @@ CLASS DOCUMENTATION
  * For more information, see the JSBSim web site: www.jsbsim.org.
  */
 
-/*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-IMPLEMENTATION
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+ /*%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ IMPLEMENTATION
+ %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
 
 int main(int argc, char* argv[])
 {
 #if defined(_MSC_VER)
-  _clearfp();
-  _controlfp(_controlfp(0, 0) & ~(_EM_INVALID | _EM_ZERODIVIDE | _EM_OVERFLOW),
-           _MCW_EM);
+	_clearfp();
+	_controlfp(_controlfp(0, 0) & ~(_EM_INVALID | _EM_ZERODIVIDE | _EM_OVERFLOW),
+		_MCW_EM);
 #elif defined(__GNUC__) && !defined(sgi) && !defined(__APPLE__)
-  feenableexcept(FE_DIVBYZERO | FE_INVALID);
+	feenableexcept(FE_DIVBYZERO | FE_INVALID);
 #endif
 
-  try {
-    real_main(argc, argv);
-  } catch (string& msg) {
-    std::cerr << "FATAL ERROR: JSBSim terminated with an exception."
-              << std::endl << "The message was: " << msg << std::endl;
-    return 1;
-  } catch (const char* msg) {
-    std::cerr << "FATAL ERROR: JSBSim terminated with an exception."
-              << std::endl << "The message was: " << msg << std::endl;
-    return 1;
-  } catch (...) {
-    std::cerr << "FATAL ERROR: JSBSim terminated with an unknown exception."
-              << std::endl;
-    return 1;
-  }
-  return 0;
+	try {
+		//real_main(argc, argv);
+		Start(argc, argv);
+	}
+	catch (string& msg) {
+		std::cerr << "FATAL ERROR: JSBSim terminated with an exception."
+			<< std::endl << "The message was: " << msg << std::endl;
+		return 1;
+	}
+	catch (const char* msg) {
+		std::cerr << "FATAL ERROR: JSBSim terminated with an exception."
+			<< std::endl << "The message was: " << msg << std::endl;
+		return 1;
+	}
+	catch (...) {
+		std::cerr << "FATAL ERROR: JSBSim terminated with an unknown exception."
+			<< std::endl;
+		return 1;
+	}
+	return 0;
 }
 
 int real_main(int argc, char* argv[])
 {
-  // *** INITIALIZATIONS *** //
+	// *** INITIALIZATIONS *** //
 
-  ScriptName = "";
-  AircraftName = "";
-  ResetName = "";
-  LogOutputName.clear();
-  LogDirectiveName.clear();
-  bool result = false, success;
-  bool was_paused = false;
-  
-  double frame_duration;
+	ScriptName = "";
+	AircraftName = "";
+	ResetName = "";
+	LogOutputName.clear();
+	LogDirectiveName.clear();
+	bool result = false, success;
+	bool was_paused = false;
 
-  double new_five_second_value = 0.0;
-  double actual_elapsed_time = 0;
-  double initial_seconds = 0;
-  double current_seconds = 0.0;
-  double paused_seconds = 0.0;
-  double sim_lag_time = 0;
-  double cycle_duration = 0.0;
-  double override_sim_rate_value = 0.0;
-  long sleep_nseconds = 0;
+	double frame_duration;
 
-  realtime = false;
-  play_nice = false;
-  suspend = false;
-  catalog = false;
-  nohighlight = false;
+	double new_five_second_value = 0.0;
+	double actual_elapsed_time = 0;
+	double initial_seconds = 0;
+	double current_seconds = 0.0;
+	double paused_seconds = 0.0;
+	double sim_lag_time = 0;
+	double cycle_duration = 0.0;
+	double override_sim_rate_value = 0.0;
+	long sleep_nseconds = 0;
 
-  // *** PARSE OPTIONS PASSED INTO THIS SPECIFIC APPLICATION: JSBSim *** //
-  success = options(argc, argv);
-  if (!success) {
-    PrintHelp();
-    exit(-1);
-  }
+	realtime = false;
+	play_nice = false;
+	suspend = false;
+	catalog = false;
+	nohighlight = false;
 
-  // *** SET UP JSBSIM *** //
-  FDMExec = new JSBSim::FGFDMExec();
-  FDMExec->SetRootDir(RootDir);
-  FDMExec->SetAircraftPath(SGPath("aircraft"));
-  FDMExec->SetEnginePath(SGPath("engine"));
-  FDMExec->SetSystemsPath(SGPath("systems"));
-  FDMExec->GetPropertyManager()->Tie("simulation/frame_start_time", &actual_elapsed_time);
-  FDMExec->GetPropertyManager()->Tie("simulation/cycle_duration", &cycle_duration);
+	// *** PARSE OPTIONS PASSED INTO THIS SPECIFIC APPLICATION: JSBSim *** //
+	success = options(argc, argv);
+	if (!success) {
+		PrintHelp();
+		exit(-1);
+	}
 
-  if (nohighlight) FDMExec->disableHighLighting();
+	// *** SET UP JSBSIM *** //
+	FDMExec = new JSBSim::FGFDMExec();
+	FDMExec->SetRootDir(RootDir);
+	FDMExec->SetAircraftPath(SGPath("aircraft"));
+	FDMExec->SetEnginePath(SGPath("engine"));
+	FDMExec->SetSystemsPath(SGPath("systems"));
+	FDMExec->GetPropertyManager()->Tie("simulation/frame_start_time", &actual_elapsed_time);
+	FDMExec->GetPropertyManager()->Tie("simulation/cycle_duration", &cycle_duration);
 
-  if (simulation_rate < 1.0 )
-    FDMExec->Setdt(simulation_rate);
-  else
-    FDMExec->Setdt(1.0/simulation_rate);
+	if (nohighlight) FDMExec->disableHighLighting();
 
-  if (override_sim_rate) override_sim_rate_value = FDMExec->GetDeltaT();
+	if (simulation_rate < 1.0)
+		FDMExec->Setdt(simulation_rate);
+	else
+		FDMExec->Setdt(1.0 / simulation_rate);
 
-  // SET PROPERTY VALUES THAT ARE GIVEN ON THE COMMAND LINE and which are for the simulation only.
+	if (override_sim_rate) override_sim_rate_value = FDMExec->GetDeltaT();
 
-  for (unsigned int i=0; i<CommandLineProperties.size(); i++) {
+	// SET PROPERTY VALUES THAT ARE GIVEN ON THE COMMAND LINE and which are for the simulation only.
 
-    if (CommandLineProperties[i].find("simulation") != std::string::npos) {
-      if (FDMExec->GetPropertyManager()->GetNode(CommandLineProperties[i])) {
-        FDMExec->SetPropertyValue(CommandLineProperties[i], CommandLinePropertyValues[i]);
-      }
-    }
-  }
+	for (unsigned int i = 0; i < CommandLineProperties.size(); i++) {
 
-  // *** OPTION A: LOAD A SCRIPT, WHICH LOADS EVERYTHING ELSE *** //
-  if (!ScriptName.isNull()) {
+		if (CommandLineProperties[i].find("simulation") != std::string::npos) {
+			if (FDMExec->GetPropertyManager()->GetNode(CommandLineProperties[i])) {
+				FDMExec->SetPropertyValue(CommandLineProperties[i], CommandLinePropertyValues[i]);
+			}
+		}
+	}
 
-    result = FDMExec->LoadScript(ScriptName, override_sim_rate_value, ResetName);
+	// *** OPTION A: LOAD A SCRIPT, WHICH LOADS EVERYTHING ELSE *** //
+	if (!ScriptName.isNull()) {
 
-    if (!result) {
-      cerr << "Script file " << ScriptName << " was not successfully loaded" << endl;
-      delete FDMExec;
-      exit(-1);
-    }
+		result = FDMExec->LoadScript(ScriptName, override_sim_rate_value, ResetName);
 
-  // *** OPTION B: LOAD AN AIRCRAFT AND A SET OF INITIAL CONDITIONS *** //
-  } else if (!AircraftName.empty() || !ResetName.isNull()) {
+		if (!result) {
+			cerr << "Script file " << ScriptName << " was not successfully loaded" << endl;
+			delete FDMExec;
+			exit(-1);
+		}
 
-    if (catalog) FDMExec->SetDebugLevel(0);
+		// *** OPTION B: LOAD AN AIRCRAFT AND A SET OF INITIAL CONDITIONS *** //
+	}
+	else if (!AircraftName.empty() || !ResetName.isNull()) {
 
-    if ( ! FDMExec->LoadModel(SGPath("aircraft"),
-                              SGPath("engine"),
-                              SGPath("systems"),
-                              AircraftName)) {
-      cerr << "  JSBSim could not be started" << endl << endl;
-      delete FDMExec;
-      exit(-1);
-    }
+		if (catalog) FDMExec->SetDebugLevel(0);
 
-    if (catalog) {
-      FDMExec->PrintPropertyCatalog();
-      delete FDMExec;
-      return 0;
-    }
+		if (!FDMExec->LoadModel(SGPath("aircraft"),
+			SGPath("engine"),
+			SGPath("systems"),
+			AircraftName)) {
+			cerr << "  JSBSim could not be started" << endl << endl;
+			delete FDMExec;
+			exit(-1);
+		}
 
-    JSBSim::FGInitialCondition *IC = FDMExec->GetIC();
-    if ( ! IC->Load(ResetName)) {
-      delete FDMExec;
-      cerr << "Initialization unsuccessful" << endl;
-      exit(-1);
-    }
+		if (catalog) {
+			FDMExec->PrintPropertyCatalog();
+			delete FDMExec;
+			return 0;
+		}
 
-  } else {
-    cout << "  No Aircraft, Script, or Reset information given" << endl << endl;
-    delete FDMExec;
-    exit(-1);
-  }
+		JSBSim::FGInitialCondition *IC = FDMExec->GetIC();
+		if (!IC->Load(ResetName)) {
+			delete FDMExec;
+			cerr << "Initialization unsuccessful" << endl;
+			exit(-1);
+		}
 
-  // Load output directives file[s], if given
-  for (unsigned int i=0; i<LogDirectiveName.size(); i++) {
-    if (!LogDirectiveName[i].isNull()) {
-      if (!FDMExec->SetOutputDirectives(LogDirectiveName[i])) {
-        cout << "Output directives not properly set in file " << LogDirectiveName[i] << endl;
-        delete FDMExec;
-        exit(-1);
-      }
-    }
-  }
+	}
+	else {
+		cout << "  No Aircraft, Script, or Reset information given" << endl << endl;
+		delete FDMExec;
+		exit(-1);
+	}
 
-  // OVERRIDE OUTPUT FILE NAME. THIS IS USEFUL FOR CASES WHERE MULTIPLE
-  // RUNS ARE BEING MADE (SUCH AS IN A MONTE CARLO STUDY) AND THE OUTPUT FILE
-  // NAME MUST BE SET EACH TIME TO AVOID THE PREVIOUS RUN DATA FROM BEING OVER-
-  // WRITTEN.
-  for (unsigned int i=0; i<LogOutputName.size(); i++) {
-    string old_filename = FDMExec->GetOutputFileName(i);
-    if (!FDMExec->SetOutputFileName(i, LogOutputName[i])) {
-      cout << "Output filename could not be set" << endl;
-    } else {
-      cout << "Output filename change from " << old_filename << " from aircraft"
-              " configuration file to " << LogOutputName[i] << " specified on"
-              " command line" << endl;
-    }
-  }
+	// Load output directives file[s], if given
+	for (unsigned int i = 0; i < LogDirectiveName.size(); i++) {
+		if (!LogDirectiveName[i].isNull()) {
+			if (!FDMExec->SetOutputDirectives(LogDirectiveName[i])) {
+				cout << "Output directives not properly set in file " << LogDirectiveName[i] << endl;
+				delete FDMExec;
+				exit(-1);
+			}
+		}
+	}
 
-  // SET PROPERTY VALUES THAT ARE GIVEN ON THE COMMAND LINE
+	// OVERRIDE OUTPUT FILE NAME. THIS IS USEFUL FOR CASES WHERE MULTIPLE
+	// RUNS ARE BEING MADE (SUCH AS IN A MONTE CARLO STUDY) AND THE OUTPUT FILE
+	// NAME MUST BE SET EACH TIME TO AVOID THE PREVIOUS RUN DATA FROM BEING OVER-
+	// WRITTEN.
+	for (unsigned int i = 0; i < LogOutputName.size(); i++) {
+		string old_filename = FDMExec->GetOutputFileName(i);
+		if (!FDMExec->SetOutputFileName(i, LogOutputName[i])) {
+			cout << "Output filename could not be set" << endl;
+		}
+		else {
+			cout << "Output filename change from " << old_filename << " from aircraft"
+				" configuration file to " << LogOutputName[i] << " specified on"
+				" command line" << endl;
+		}
+	}
 
-  for (unsigned int i=0; i<CommandLineProperties.size(); i++) {
+	// SET PROPERTY VALUES THAT ARE GIVEN ON THE COMMAND LINE
 
-    if (!FDMExec->GetPropertyManager()->GetNode(CommandLineProperties[i])) {
-      cerr << endl << "  No property by the name " << CommandLineProperties[i] << endl;
-      delete FDMExec;
-      exit(-1);
-    } else {
-      FDMExec->SetPropertyValue(CommandLineProperties[i], CommandLinePropertyValues[i]);
-    }
-  }
+	for (unsigned int i = 0; i < CommandLineProperties.size(); i++) {
 
-  FDMExec->RunIC();
+		if (!FDMExec->GetPropertyManager()->GetNode(CommandLineProperties[i])) {
+			cerr << endl << "  No property by the name " << CommandLineProperties[i] << endl;
+			delete FDMExec;
+			exit(-1);
+		}
+		else {
+			FDMExec->SetPropertyValue(CommandLineProperties[i], CommandLinePropertyValues[i]);
+		}
+	}
 
-  // PRINT SIMULATION CONFIGURATION
-  FDMExec->PrintSimulationConfiguration();
+	FDMExec->RunIC();
 
-  // Dump the simulation state (position, orientation, etc.)
-  FDMExec->GetPropagate()->DumpState();
-  
-  // Perform trim if requested via the initialization file
-  JSBSim::TrimMode icTrimRequested = (JSBSim::TrimMode)FDMExec->GetIC()->TrimRequested();
-  if (icTrimRequested != JSBSim::TrimMode::tNone) {
-    trimmer = new JSBSim::FGTrim( FDMExec, icTrimRequested );
-    try {
-      trimmer->DoTrim();
+	// PRINT SIMULATION CONFIGURATION
+	FDMExec->PrintSimulationConfiguration();
 
-      if (FDMExec->GetDebugLevel() > 0)
-        trimmer->Report();
+	// Dump the simulation state (position, orientation, etc.)
+	FDMExec->GetPropagate()->DumpState();
 
-      delete trimmer;
-    } catch (string& msg) {
-      cerr << endl << msg << endl << endl;
-      exit(1);
-    }
-  }
-  
-  cout << endl << JSBSim::FGFDMExec::fggreen << JSBSim::FGFDMExec::highint
-       << "---- JSBSim Execution beginning ... --------------------------------------------"
-       << JSBSim::FGFDMExec::reset << endl << endl;
+	// Perform trim if requested via the initialization file
+	JSBSim::TrimMode icTrimRequested = (JSBSim::TrimMode)FDMExec->GetIC()->TrimRequested();
+	if (icTrimRequested != JSBSim::TrimMode::tNone) {
+		trimmer = new JSBSim::FGTrim(FDMExec, icTrimRequested);
+		try {
+			trimmer->DoTrim();
 
-  result = FDMExec->Run();  // MAKE AN INITIAL RUN
+			if (FDMExec->GetDebugLevel() > 0)
+				trimmer->Report();
 
-  if (suspend) FDMExec->Hold();
+			delete trimmer;
+		}
+		catch (string& msg) {
+			cerr << endl << msg << endl << endl;
+			exit(1);
+		}
+	}
 
-  // Print actual time at start
-  char s[100];
-  time_t tod;
-  time(&tod);
-  strftime(s, 99, "%A %B %d %Y %X", localtime(&tod));
-  cout << "Start: " << s << " (HH:MM:SS)" << endl;
+	cout << endl << JSBSim::FGFDMExec::fggreen << JSBSim::FGFDMExec::highint
+		<< "---- JSBSim Execution beginning ... --------------------------------------------"
+		<< JSBSim::FGFDMExec::reset << endl << endl;
 
-  frame_duration = FDMExec->GetDeltaT();
-  if (realtime) sleep_nseconds = (long)(frame_duration*1e9);
-  else          sleep_nseconds = (sleep_period )*1e9;           // 0.01 seconds
+	result = FDMExec->Run();  // MAKE AN INITIAL RUN
 
-  tzset(); 
-  current_seconds = initial_seconds = getcurrentseconds();
+	if (suspend) FDMExec->Hold();
 
-  // *** CYCLIC EXECUTION LOOP, AND MESSAGE READING *** //
-  while (result && FDMExec->GetSimTime() <= end_time) {
+	// Print actual time at start
+	char s[100];
+	time_t tod;
+	time(&tod);
+	strftime(s, 99, "%A %B %d %Y %X", localtime(&tod));
+	cout << "Start: " << s << " (HH:MM:SS)" << endl;
 
-    FDMExec->ProcessMessage(); // Process messages, if any.
-    
-    // Check if increment then hold is on and take appropriate actions if it is
-    // Iterate is not supported in realtime - only in batch and playnice modes
-    FDMExec->CheckIncrementalHold();
-    
-    // if running realtime, throttle the execution, else just run flat-out fast
-    // unless "playing nice", in which case sleep for a while (0.01 seconds) each frame.
-    // If suspended, then don't increment cumulative realtime "stopwatch".
+	frame_duration = FDMExec->GetDeltaT();
+	if (realtime) sleep_nseconds = (long)(frame_duration*1e9);
+	else          sleep_nseconds = (sleep_period)*1e9;           // 0.01 seconds
 
-    if ( ! FDMExec->Holding()) {
-      if ( ! realtime ) {         // ------------ RUNNING IN BATCH MODE
+	tzset();
+	current_seconds = initial_seconds = getcurrentseconds();
 
-        result = FDMExec->Run();
+	// *** CYCLIC EXECUTION LOOP, AND MESSAGE READING *** //
+	while (result && FDMExec->GetSimTime() <= end_time) {
 
-        if (play_nice) sim_nsleep(sleep_nseconds);
+		FDMExec->ProcessMessage(); // Process messages, if any.
 
-      } else {                    // ------------ RUNNING IN REALTIME MODE
+		// Check if increment then hold is on and take appropriate actions if it is
+		// Iterate is not supported in realtime - only in batch and playnice modes
+		FDMExec->CheckIncrementalHold();
 
-        // "was_paused" will be true if entering this "run" loop from a paused state.
-        if (was_paused) {
-          initial_seconds += paused_seconds;
-          was_paused = false;
-        }
-        current_seconds = getcurrentseconds();                      // Seconds since 1 Jan 1970
-        actual_elapsed_time = current_seconds - initial_seconds;    // Real world elapsed seconds since start
-        sim_lag_time = actual_elapsed_time - FDMExec->GetSimTime(); // How far behind sim-time is from actual
-                                                                    // elapsed time.
-        for (int i=0; i<(int)(sim_lag_time/frame_duration); i++) {  // catch up sim time to actual elapsed time.
-          result = FDMExec->Run();
-          cycle_duration = getcurrentseconds() - current_seconds;   // Calculate cycle duration
-          current_seconds = getcurrentseconds();                    // Get new current_seconds
-          if (FDMExec->Holding()) break;
-        }
+		// if running realtime, throttle the execution, else just run flat-out fast
+		// unless "playing nice", in which case sleep for a while (0.01 seconds) each frame.
+		// If suspended, then don't increment cumulative realtime "stopwatch".
 
-        if (play_nice) sim_nsleep(sleep_nseconds);
+		if (!FDMExec->Holding()) {
+			if (!realtime) {         // ------------ RUNNING IN BATCH MODE
 
-        if (FDMExec->GetSimTime() >= new_five_second_value) { // Print out elapsed time every five seconds.
-          cout << "Simulation elapsed time: " << FDMExec->GetSimTime() << endl;
-          new_five_second_value += 5.0;
-        }
-      }
-    } else { // Suspended
-      was_paused = true;
-      paused_seconds = getcurrentseconds() - current_seconds;
-      sim_nsleep(sleep_nseconds);
-      result = FDMExec->Run();
-    }
+				result = FDMExec->Run();
 
-  }
+				if (play_nice) sim_nsleep(sleep_nseconds);
 
-  // PRINT ENDING CLOCK TIME
-  time(&tod);
-  strftime(s, 99, "%A %B %d %Y %X", localtime(&tod));
-  cout << "End: " << s << " (HH:MM:SS)" << endl;
+			}
+			else {                    // ------------ RUNNING IN REALTIME MODE
 
-  // CLEAN UP
-  delete FDMExec;
+		   // "was_paused" will be true if entering this "run" loop from a paused state.
+				if (was_paused) {
+					initial_seconds += paused_seconds;
+					was_paused = false;
+				}
+				current_seconds = getcurrentseconds();                      // Seconds since 1 Jan 1970
+				actual_elapsed_time = current_seconds - initial_seconds;    // Real world elapsed seconds since start
+				sim_lag_time = actual_elapsed_time - FDMExec->GetSimTime(); // How far behind sim-time is from actual
+																			// elapsed time.
+				for (int i = 0; i < (int)(sim_lag_time / frame_duration); i++) {  // catch up sim time to actual elapsed time.
+					result = FDMExec->Run();
+					cycle_duration = getcurrentseconds() - current_seconds;   // Calculate cycle duration
+					current_seconds = getcurrentseconds();                    // Get new current_seconds
+					if (FDMExec->Holding()) break;
+				}
 
-  return 0;
+				if (play_nice) sim_nsleep(sleep_nseconds);
+
+				if (FDMExec->GetSimTime() >= new_five_second_value) { // Print out elapsed time every five seconds.
+					cout << "Simulation elapsed time: " << FDMExec->GetSimTime() << endl;
+					new_five_second_value += 5.0;
+				}
+			}
+		}
+		else { // Suspended
+			was_paused = true;
+			paused_seconds = getcurrentseconds() - current_seconds;
+			sim_nsleep(sleep_nseconds);
+			result = FDMExec->Run();
+		}
+
+	}
+
+	// PRINT ENDING CLOCK TIME
+	time(&tod);
+	strftime(s, 99, "%A %B %d %Y %X", localtime(&tod));
+	cout << "End: " << s << " (HH:MM:SS)" << endl;
+
+	// CLEAN UP
+	delete FDMExec;
+
+	return 0;
 }
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -571,175 +585,203 @@ int real_main(int argc, char* argv[])
 
 bool options(int count, char **arg)
 {
-  int i;
-  bool result = true;
+	int i;
+	bool result = true;
 
-  if (count == 1) {
-    PrintHelp();
-    exit(0);
-  }
+	if (count == 1) {
+		PrintHelp();
+		exit(0);
+	}
 
-  cout.setf(ios_base::fixed);
+	cout.setf(ios_base::fixed);
 
-  for (i=1; i<count; i++) {
-    string argument = string(arg[i]);
-    string keyword(argument);
-    string value("");
-    string::size_type n=argument.find("=");
+	for (i = 1; i < count; i++) {
+		string argument = string(arg[i]);
+		string keyword(argument);
+		string value("");
+		string::size_type n = argument.find("=");
 
-    if (n != string::npos && n > 0) {
-      keyword = argument.substr(0, n);
-      value = argument.substr(n+1);
-    }
+		if (n != string::npos && n > 0) {
+			keyword = argument.substr(0, n);
+			value = argument.substr(n + 1);
+		}
 
-    if (keyword == "--help") {
-      PrintHelp();
-      exit(0);
-    } else if (keyword == "--version") {
-      cout << endl << "  JSBSim Version: " << FDMExec->GetVersion() << endl << endl;
-      exit (0);
-    } else if (keyword == "--realtime") {
-      realtime = true;
-    } else if (keyword == "--nice") {
-      play_nice = true;
-      if (n != string::npos) {
-        try {
-          sleep_period = atof( value.c_str() );
-        } catch (...) {
-          cerr << endl << "  Invalid sleep period given!" << endl << endl;
-          result = false;
-        }
-      } else {
-        sleep_period = 0.01;
-      }
-    } else if (keyword == "--suspend") {
-      suspend = true;
-    } else if (keyword == "--nohighlight") {
-        nohighlight = true;
-    } else if (keyword == "--outputlogfile") {
-      if (n != string::npos) {
-        LogOutputName.push_back(value);
-      }
-    } else if (keyword == "--logdirectivefile") {
-      if (n != string::npos) {
-        LogDirectiveName.push_back(SGPath::fromLocal8Bit(value.c_str()));
-      } else {
-        gripe;
-        exit(1);
-      }
-    } else if (keyword == "--root") {
-      if (n != string::npos) {
-        RootDir = SGPath::fromLocal8Bit(value.c_str());
-      } else {
-        gripe;
-        exit(1);
-      }
-    } else if (keyword == "--aircraft") {
-      if (n != string::npos) {
-        AircraftName = value;
-      } else {
-        gripe;
-        exit(1);
-      }
-    } else if (keyword == "--script") {
-      if (n != string::npos) {
-        ScriptName = SGPath::fromLocal8Bit(value.c_str());
-      } else {
-        gripe;
-        exit(1);
-      }
-    } else if (keyword == "--initfile") {
-      if (n != string::npos) {
-        ResetName = SGPath::fromLocal8Bit(value.c_str());
-      } else {
-        gripe;
-        exit(1);
-      }
+		if (keyword == "--help") {
+			PrintHelp();
+			exit(0);
+		}
+		else if (keyword == "--version") {
+			cout << endl << "  JSBSim Version: " << FDMExec->GetVersion() << endl << endl;
+			exit(0);
+		}
+		else if (keyword == "--realtime") {
+			realtime = true;
+		}
+		else if (keyword == "--nice") {
+			play_nice = true;
+			if (n != string::npos) {
+				try {
+					sleep_period = atof(value.c_str());
+				}
+				catch (...) {
+					cerr << endl << "  Invalid sleep period given!" << endl << endl;
+					result = false;
+				}
+			}
+			else {
+				sleep_period = 0.01;
+			}
+		}
+		else if (keyword == "--suspend") {
+			suspend = true;
+		}
+		else if (keyword == "--nohighlight") {
+			nohighlight = true;
+		}
+		else if (keyword == "--outputlogfile") {
+			if (n != string::npos) {
+				LogOutputName.push_back(value);
+			}
+		}
+		else if (keyword == "--logdirectivefile") {
+			if (n != string::npos) {
+				LogDirectiveName.push_back(SGPath::fromLocal8Bit(value.c_str()));
+			}
+			else {
+				gripe;
+				exit(1);
+			}
+		}
+		else if (keyword == "--root") {
+			if (n != string::npos) {
+				RootDir = SGPath::fromLocal8Bit(value.c_str());
+			}
+			else {
+				gripe;
+				exit(1);
+			}
+		}
+		else if (keyword == "--aircraft") {
+			if (n != string::npos) {
+				AircraftName = value;
+			}
+			else {
+				gripe;
+				exit(1);
+			}
+		}
+		else if (keyword == "--script") {
+			if (n != string::npos) {
+				ScriptName = SGPath::fromLocal8Bit(value.c_str());
+			}
+			else {
+				gripe;
+				exit(1);
+			}
+		}
+		else if (keyword == "--initfile") {
+			if (n != string::npos) {
+				ResetName = SGPath::fromLocal8Bit(value.c_str());
+			}
+			else {
+				gripe;
+				exit(1);
+			}
 
-    } else if (keyword == "--property") {
-      if (n != string::npos) {
-         string propName = value.substr(0,value.find("="));
-         string propValueString = value.substr(value.find("=")+1);
-         double propValue = atof(propValueString.c_str());
-         CommandLineProperties.push_back(propName);
-         CommandLinePropertyValues.push_back(propValue);
-      } else {
-        gripe;
-        exit(1);
-      }
+		}
+		else if (keyword == "--property") {
+			if (n != string::npos) {
+				string propName = value.substr(0, value.find("="));
+				string propValueString = value.substr(value.find("=") + 1);
+				double propValue = atof(propValueString.c_str());
+				CommandLineProperties.push_back(propName);
+				CommandLinePropertyValues.push_back(propValue);
+			}
+			else {
+				gripe;
+				exit(1);
+			}
 
-    } else if (keyword.substr(0,5) == "--end") {
-      if (n != string::npos) {
-        try {
-        end_time = atof( value.c_str() );
-        } catch (...) {
-          cerr << endl << "  Invalid end time given!" << endl << endl;
-          result = false;
-        }
-      } else {
-        gripe;
-        exit(1);
-      }
+		}
+		else if (keyword.substr(0, 5) == "--end") {
+			if (n != string::npos) {
+				try {
+					end_time = atof(value.c_str());
+				}
+				catch (...) {
+					cerr << endl << "  Invalid end time given!" << endl << endl;
+					result = false;
+				}
+			}
+			else {
+				gripe;
+				exit(1);
+			}
 
-    } else if (keyword == "--simulation-rate") {
-      if (n != string::npos) {
-        try {
-          simulation_rate = atof( value.c_str() );
-          override_sim_rate = true;
-        } catch (...) {
-          cerr << endl << "  Invalid simulation rate given!" << endl << endl;
-          result = false;
-        }
-      } else {
-        gripe;
-        exit(1);
-      }
+		}
+		else if (keyword == "--simulation-rate") {
+			if (n != string::npos) {
+				try {
+					simulation_rate = atof(value.c_str());
+					override_sim_rate = true;
+				}
+				catch (...) {
+					cerr << endl << "  Invalid simulation rate given!" << endl << endl;
+					result = false;
+				}
+			}
+			else {
+				gripe;
+				exit(1);
+			}
 
-    } else if (keyword == "--catalog") {
-        catalog = true;
-        if (value.size() > 0) AircraftName=value;
-    } else if (keyword.substr(0,2) != "--" && value.empty() ) {
-      // See what kind of files we are specifying on the command line
+		}
+		else if (keyword == "--catalog") {
+			catalog = true;
+			if (value.size() > 0) AircraftName = value;
+		}
+		else if (keyword.substr(0, 2) != "--" && value.empty()) {
+			// See what kind of files we are specifying on the command line
 
-      XMLFile xmlFile;
-      SGPath path = SGPath::fromLocal8Bit(keyword.c_str());
-      
-      if (xmlFile.IsScriptFile(path)) ScriptName = path;
-      else if (xmlFile.IsLogDirectiveFile(path))  LogDirectiveName.push_back(path);
-      else if (xmlFile.IsAircraftFile(SGPath("aircraft")/keyword/keyword)) AircraftName = keyword;
-      else if (xmlFile.IsInitFile(path)) ResetName = path;
-      else if (xmlFile.IsInitFile(SGPath("aircraft")/AircraftName/keyword)) ResetName = SGPath("aircraft")/AircraftName/keyword;
-      else {
-        cerr << "The argument \"" << keyword << "\" cannot be interpreted as a file name or option." << endl;
-        exit(1);
-      }
+			XMLFile xmlFile;
+			SGPath path = SGPath::fromLocal8Bit(keyword.c_str());
 
-    }
-    else //Unknown keyword so print the help file, the bad keyword and abort
-    {
-          PrintHelp();
-          cerr << "The argument \"" << keyword << "\" cannot be interpreted as a file name or option." << endl;
-          exit(1);
-    }
+			if (xmlFile.IsScriptFile(path)) ScriptName = path;
+			else if (xmlFile.IsLogDirectiveFile(path))  LogDirectiveName.push_back(path);
+			else if (xmlFile.IsAircraftFile(SGPath("aircraft") / keyword / keyword)) AircraftName = keyword;
+			else if (xmlFile.IsInitFile(path)) ResetName = path;
+			else if (xmlFile.IsInitFile(SGPath("aircraft") / AircraftName / keyword)) ResetName = SGPath("aircraft") / AircraftName / keyword;
+			else {
+				cerr << "The argument \"" << keyword << "\" cannot be interpreted as a file name or option." << endl;
+				exit(1);
+			}
 
-  }
+		}
+		else //Unknown keyword so print the help file, the bad keyword and abort
+		{
+			PrintHelp();
+			cerr << "The argument \"" << keyword << "\" cannot be interpreted as a file name or option." << endl;
+			exit(1);
+		}
 
-  // Post-processing for script options. check for incompatible options.
+	}
 
-  if (catalog && !ScriptName.isNull()) {
-    cerr << "Cannot specify catalog with script option" << endl << endl;
-    result = false;
-  }
-  if (!AircraftName.empty() && ResetName.isNull() && !catalog) {
-    cerr << "You must specify an initialization file with the aircraft name." << endl << endl;
-    result = false;
-  }
-  if (!ScriptName.isNull() && !AircraftName.empty()) {
-    cerr << "You cannot specify an aircraft file with a script." << endl;
-    result = false;
-  }
+	// Post-processing for script options. check for incompatible options.
 
-  return result;
+	if (catalog && !ScriptName.isNull()) {
+		cerr << "Cannot specify catalog with script option" << endl << endl;
+		result = false;
+	}
+	if (!AircraftName.empty() && ResetName.isNull() && !catalog) {
+		cerr << "You must specify an initialization file with the aircraft name." << endl << endl;
+		result = false;
+	}
+	if (!ScriptName.isNull() && !AircraftName.empty()) {
+		cerr << "You cannot specify an aircraft file with a script." << endl;
+		result = false;
+	}
+
+	return result;
 
 }
 
@@ -747,30 +789,41 @@ bool options(int count, char **arg)
 
 void PrintHelp(void)
 {
-  cout << endl << "  JSBSim version " << FDMExec->GetVersion() << endl << endl;
-  cout << "  Usage: jsbsim [script file name] [output file names] <options>" << endl << endl;
-  cout << "  options:" << endl;
-    cout << "    --help  returns this message" << endl;
-    cout << "    --version  returns the version number" << endl;
-    cout << "    --outputlogfile=<filename>  sets (overrides) the name of a data output file" << endl;
-    cout << "    --logdirectivefile=<filename>  specifies the name of a data logging directives file" << endl;
-    cout << "                                   (can appear multiple times)" << endl;
-    cout << "    --root=<path>  specifies the JSBSim root directory (where aircraft/, engine/, etc. reside)" << endl;
-    cout << "    --aircraft=<filename>  specifies the name of the aircraft to be modeled" << endl;
-    cout << "    --script=<filename>  specifies a script to run" << endl;
-    cout << "    --realtime  specifies to run in actual real world time" << endl;
-    cout << "    --nice  specifies to run at lower CPU usage" << endl;
-    cout << "    --nohighlight  specifies that console output should be pure text only (no color)" << endl;
-    cout << "    --suspend  specifies to suspend the simulation after initialization" << endl;
-    cout << "    --initfile=<filename>  specifies an initilization file" << endl;
-    cout << "    --catalog specifies that all properties for this aircraft model should be printed" << endl;
-    cout << "              (catalog=aircraftname is an optional format)" << endl;
-    cout << "    --property=<name=value> e.g. --property=simulation/integrator/rate/rotational=1" << endl;
-    cout << "    --simulation-rate=<rate (double)> specifies the sim dT time or frequency" << endl;
-    cout << "                      If rate specified is less than 1, it is interpreted as" << endl;
-    cout << "                      a time step size, otherwise it is assumed to be a rate in Hertz." << endl;
-    cout << "    --end=<time (double)> specifies the sim end time" << endl << endl;
+	cout << endl << "  JSBSim version " << FDMExec->GetVersion() << endl << endl;
+	cout << "  Usage: jsbsim [script file name] [output file names] <options>" << endl << endl;
+	cout << "  options:" << endl;
+	cout << "    --help  returns this message" << endl;
+	cout << "    --version  returns the version number" << endl;
+	cout << "    --outputlogfile=<filename>  sets (overrides) the name of a data output file" << endl;
+	cout << "    --logdirectivefile=<filename>  specifies the name of a data logging directives file" << endl;
+	cout << "                                   (can appear multiple times)" << endl;
+	cout << "    --root=<path>  specifies the JSBSim root directory (where aircraft/, engine/, etc. reside)" << endl;
+	cout << "    --aircraft=<filename>  specifies the name of the aircraft to be modeled" << endl;
+	cout << "    --script=<filename>  specifies a script to run" << endl;
+	cout << "    --realtime  specifies to run in actual real world time" << endl;
+	cout << "    --nice  specifies to run at lower CPU usage" << endl;
+	cout << "    --nohighlight  specifies that console output should be pure text only (no color)" << endl;
+	cout << "    --suspend  specifies to suspend the simulation after initialization" << endl;
+	cout << "    --initfile=<filename>  specifies an initilization file" << endl;
+	cout << "    --catalog specifies that all properties for this aircraft model should be printed" << endl;
+	cout << "              (catalog=aircraftname is an optional format)" << endl;
+	cout << "    --property=<name=value> e.g. --property=simulation/integrator/rate/rotational=1" << endl;
+	cout << "    --simulation-rate=<rate (double)> specifies the sim dT time or frequency" << endl;
+	cout << "                      If rate specified is less than 1, it is interpreted as" << endl;
+	cout << "                      a time step size, otherwise it is assumed to be a rate in Hertz." << endl;
+	cout << "    --end=<time (double)> specifies the sim end time" << endl << endl;
 
-    cout << "  NOTE: There can be no spaces around the = sign when" << endl;
-    cout << "        an option is followed by a filename" << endl << endl;
+	cout << "  NOTE: There can be no spaces around the = sign when" << endl;
+	cout << "        an option is followed by a filename" << endl << endl;
+}
+std::thread Start(int argc, char ** argv)
+{
+	std::thread t1(real_main,argc,argv);
+	t1.join();
+	return t1;
+}
+int Stop(std::thread thread)
+{
+	thread.detach();
+	return 1;
 }
